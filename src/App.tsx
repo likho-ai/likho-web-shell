@@ -6,6 +6,7 @@ import { Remote } from './lib/remotes';
 import { ThemeProvider } from './lib/theme';
 import { HomePage } from './pages/Home';
 import { LoginPage } from './pages/Login';
+import { SearchPage } from './pages/Search';
 import { SettingsPage } from './pages/Settings';
 import { VocabularyPage } from './pages/Vocabulary';
 
@@ -51,6 +52,7 @@ export function App() {
                   path="recordings/:id"
                   element={<Remote name="transcript" manifestUrl={config.manifestUrl} />}
                 />
+                <Route path="search" element={<SearchPage />} />
                 <Route path="vocabulary" element={<VocabularyPage />} />
                 <Route path="settings" element={<SettingsPage />} />
               </Route>

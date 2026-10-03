@@ -1,11 +1,12 @@
 import { Button, Logo } from '@likho-ai/ui';
 import { useLogout, useMe } from '@likho-ai/web-sdk';
-import { BookOpenText, LogOut, Mic, Moon, Settings, Sun, Upload } from 'lucide-react';
+import { BookOpenText, LogOut, Mic, Moon, Search, Settings, Sun, Upload } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router';
 import { useTheme } from '../lib/theme';
 
 const links = [
   { to: '/recordings', label: 'Recordings', icon: Mic },
+  { to: '/search', label: 'Search', icon: Search },
   { to: '/vocabulary', label: 'Vocabulary', icon: BookOpenText },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
