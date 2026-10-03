@@ -1,0 +1,56 @@
+@import 'tailwindcss';
+@import '@likho-ai/ui/tokens.css';
+@source '../node_modules/@likho-ai/ui/dist';
+
+/* The page: the violet-to-indigo ground in light mode, near-black in dark mode. */
+html {
+  background: var(--likho-ground);
+  background-image: var(--likho-ground-image);
+  background-attachment: fixed;
+  color: var(--likho-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+[lang='hi'] {
+  font-family: var(--font-deva);
+}
+
+/* The hero headline wears the brand gradient. */
+.headline-gradient-1 {
+  background: var(--likho-headline-1);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.headline-gradient-2 {
+  background: var(--likho-headline-2);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Lines arriving while a job runs. */
+@keyframes likho-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fade-in {
+  animation: likho-fade-in 220ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fade-in {
+    animation: none;
+  }
+}
