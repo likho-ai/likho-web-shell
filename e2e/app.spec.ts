@@ -75,7 +75,7 @@ test('upload a call and read its transcript', async ({ page }) => {
   const openAt = results.getByRole('link', { name: /^Open .* at / }).first();
   await expect(openAt).toBeVisible();
   const recordingId = recordingUrl.split('/').pop()!;
-  await expect(openAt).toHaveAttribute('href', new RegExp(`/recordings/${recordingId}\?t=\d+$`));
+  await expect(openAt).toHaveAttribute('href', new RegExp(`/recordings/${recordingId}\\?t=\\d+$`));
   await openAt.click();
   await expect(page.getByRole('heading', { name: 'Transcript' })).toBeVisible();
   await expect(page.getByLabel('Transcript lines').locator('[aria-current="true"]')).toBeVisible({ timeout: 30_000 });
