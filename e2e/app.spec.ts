@@ -63,6 +63,23 @@ test('upload a call and read its transcript', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible({ timeout: 15_000 });
   await page.getByRole('button', { name: 'Pause' }).click();
 
+  // Search finds a word of the transcript and opens the line at its moment.
+  const firstLine = (await lines.first().locator('p').first().innerText()).trim();
+  const word = firstLine.split(/\s+/).find((w) => /^[a-z]{4,}$/i.test(w)) ?? firstLine.split(/\s+/)[0]!;
+  const recordingUrl = page.url().split('?')[0]!;
+  await page.getByRole('link', { name: 'Search' }).click();
+  await page.getByRole('searchbox', { name: 'Words to find' }).fill(word);
+  await page.getByRole('button', { name: 'Search' }).click();
+  const results = page.getByRole('region', { name: 'Results' });
+  await expect(results).toBeVisible({ timeout: 30_000 });
+  const openAt = results.getByRole('link', { name: /^Open .* at / }).first();
+  await expect(openAt).toBeVisible();
+  const recordingId = recordingUrl.split('/').pop()!;
+  await expect(openAt).toHaveAttribute('href', new RegExp(`/recordings/${recordingId}\?t=\d+$`));
+  await openAt.click();
+  await expect(page.getByRole('heading', { name: 'Transcript' })).toBeVisible();
+  await expect(page.getByLabel('Transcript lines').locator('[aria-current="true"]')).toBeVisible({ timeout: 30_000 });
+
   // Clean up: the recording and its audio.
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Delete this recording' }).click();
