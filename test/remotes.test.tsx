@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 const registered: unknown[] = [];
 const loaded: string[] = [];
@@ -45,10 +46,35 @@ describe('remotes', () => {
     expect(entries.library).toBe('/mfe/library/remoteEntry.js');
   });
 
-  it('shows an app and, when it cannot be loaded, a message with a retry', async () => {
+  // A component that suspends with use() must be rendered inside an awaited act().
+  it('shows an app', async () => {
     vi.stubGlobal('fetch', (async () => new Response('', { status: 404 })) as unknown as typeof fetch);
-    render(<Remote name="library" manifestUrl="/mfe/manifest.json" />);
+    await act(async () => {
+      render(<Remote name="library" manifestUrl="/mfe/manifest.json" />);
+    });
     expect(await screen.findByText('Hello from library/App')).toBeInTheDocument();
+    expect(loaded).toEqual(['library/App']);
     vi.unstubAllGlobals();
+  });
+
+  it('shows a message when an app cannot be loaded, and loads it again on retry', async () => {
+    vi.stubGlobal('fetch', (async () => new Response('', { status: 404 })) as unknown as typeof fetch);
+    vi.spyOn(console, 'error').mockImplementation(() => {}); // React reports the caught error
+    fail = true;
+    await act(async () => {
+      render(<Remote name="transcript" manifestUrl="/mfe/manifest.json" />);
+    });
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('The transcript app could not be loaded.');
+    expect(alert).toHaveTextContent('remoteEntry.js: 502');
+
+    fail = false;
+    await act(async () => {
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Try again' }));
+    });
+    expect(await screen.findByText('Hello from transcript/App')).toBeInTheDocument();
+    expect(loaded).toEqual(['transcript/App', 'transcript/App']);
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 });

@@ -8,7 +8,7 @@
  */
 import { loadRemote, registerRemotes } from '@module-federation/enhanced/runtime';
 import { Button } from '@likho-ai/ui';
-import { Component, lazy, Suspense, type ComponentType, type ReactNode } from 'react';
+import { Component, Suspense, use, type ComponentType, type ReactNode } from 'react';
 
 export type RemoteName = 'library' | 'transcript';
 
@@ -43,27 +43,38 @@ export function registerFromManifest(
       );
       return entries;
     })();
+    registered.catch(() => {
+      registered = null; // so a retry reads the manifest again
+    });
   }
   return registered;
 }
 
-/** For tests: forget the manifest. */
+/** For tests: forget the manifest and every module. */
 export function resetRemotes(): void {
   registered = null;
+  modules.clear();
 }
 
-class RemoteBoundary extends Component<{ name: string; children: ReactNode }, { error: Error | null }> {
+class RemoteBoundary extends Component<
+  { name: string; onRetry: () => void; children: ReactNode },
+  { error: Error | null }
+> {
   state = { error: null as Error | null };
   static getDerivedStateFromError(error: Error) {
     return { error };
   }
+  retry = () => {
+    this.props.onRetry();
+    this.setState({ error: null });
+  };
   render() {
     if (this.state.error) {
       return (
         <div role="alert" className="rounded-card border border-line bg-surface p-6 shadow-card">
           <p className="font-semibold">The {this.props.name} app could not be loaded.</p>
           <p className="mt-1 text-sm text-ink-2">{this.state.error.message}</p>
-          <Button className="mt-4" onClick={() => this.setState({ error: null })}>
+          <Button className="mt-4" onClick={this.retry}>
             Try again
           </Button>
         </div>
@@ -73,21 +84,45 @@ class RemoteBoundary extends Component<{ name: string; children: ReactNode }, { 
   }
 }
 
-const cache = new Map<string, ComponentType<Record<string, unknown>>>();
+type RemoteModule = { default: ComponentType<Record<string, unknown>> };
 
-function remoteComponent(name: RemoteName, exposed: string, manifestUrl: string) {
+const modules = new Map<string, Promise<RemoteModule>>();
+
+/** The module an app exposes, fetched once; a failed attempt stays until `forgetRemote`. */
+function remoteModule(name: RemoteName, exposed: string, manifestUrl: string): Promise<RemoteModule> {
   const key = `${name}/${exposed}`;
-  let component = cache.get(key);
-  if (!component) {
-    component = lazy(async () => {
+  let pending = modules.get(key);
+  if (!pending) {
+    pending = (async () => {
       await registerFromManifest(manifestUrl);
-      const loaded = (await loadRemote<{ default: ComponentType<Record<string, unknown>> }>(key)) ?? null;
+      const loaded = await loadRemote<RemoteModule>(key);
       if (!loaded?.default) throw new Error(`${key} has no default export`);
-      return { default: loaded.default };
-    });
-    cache.set(key, component);
+      return loaded;
+    })();
+    modules.set(key, pending);
   }
-  return component;
+  return pending;
+}
+
+/** Forgets an attempt, so the next render fetches the module again. */
+function forgetRemote(name: RemoteName, exposed: string): void {
+  modules.delete(`${name}/${exposed}`);
+}
+
+/** Renders the component an app exposes; suspends until the module has arrived. */
+function RemoteApp({
+  name,
+  exposed,
+  manifestUrl,
+  props,
+}: {
+  name: RemoteName;
+  exposed: string;
+  manifestUrl: string;
+  props: Record<string, unknown>;
+}) {
+  const { default: App } = use(remoteModule(name, exposed, manifestUrl));
+  return <App {...props} />;
 }
 
 export function Skeleton({ label }: { label: string }) {
@@ -112,11 +147,10 @@ export function Remote({
   manifestUrl: string;
   props?: Record<string, unknown>;
 }) {
-  const Loaded = remoteComponent(name, exposed, manifestUrl);
   return (
-    <RemoteBoundary name={name}>
+    <RemoteBoundary name={name} onRetry={() => forgetRemote(name, exposed)}>
       <Suspense fallback={<Skeleton label={`Loading the ${name} app`} />}>
-        <Loaded {...props} />
+        <RemoteApp name={name} exposed={exposed} manifestUrl={manifestUrl} props={props} />
       </Suspense>
     </RemoteBoundary>
   );
