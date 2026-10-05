@@ -46,9 +46,14 @@ In `likho-mfe-library`, `likho-mfe-transcript`, `likho-mfe-admin` and `likho-mfe
 
 The shell's own pages besides the home page: sign in (with "Forgotten your password?" →
 `/forgot`, which mails a link to `/reset/:token`), `/invite/:token` (the page an invitation link
-opens: whom it is for, a name, a password), search, vocabulary and settings (appearance and your
-own password; the workspace's settings, people, keys and the audit log are the admin app's).
+opens: whom it is for, a name, a password), search and settings (appearance and your own
+password; the workspace's settings, people, keys and the audit log are the admin app's).
 A viewer sees no upload button and no Admin section.
+
+The search page finds every line of every call by a few words in either layer and narrows them
+by language, campaign, agent, disposition and the days the calls were made (the values with their
+counts come from likho-api); everything is in the address, so a search can be shared. A search
+can be kept for later under a name, for everyone in the workspace, and opened from its chip.
 
 ## Try it end to end
 
