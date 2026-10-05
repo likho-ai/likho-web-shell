@@ -4,6 +4,7 @@ import { BrowserRouter, Route, Routes, useNavigate } from 'react-router';
 import { Layout, RequireSession } from './components/Layout';
 import { Remote } from './lib/remotes';
 import { ThemeProvider } from './lib/theme';
+import { EmbedTranscriptPage } from './pages/Embed';
 import { HomePage } from './pages/Home';
 import { InvitePage } from './pages/Invite';
 import { LoginPage } from './pages/Login';
@@ -41,6 +42,11 @@ export function App() {
       <BrowserRouter>
         <Providers>
           <Routes>
+            {/* Another system's page: the transcript beside a call, with the token it was given. */}
+            <Route
+              path="embed/recordings/:ref"
+              element={<EmbedTranscriptPage apiOrigin={config.apiOrigin} manifestUrl={config.manifestUrl} />}
+            />
             <Route element={<Layout />}>
               <Route index element={<HomePage />} />
               <Route path="login" element={<LoginPage />} />

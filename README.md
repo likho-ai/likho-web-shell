@@ -18,6 +18,9 @@ browser ── gateway (nginx) ──┬── /            likho-web-shell     
                              ├── /mfe/admin/       likho-mfe-admin       /admin (admins)
                              ├── /mfe/vocabulary/  likho-mfe-vocabulary  /vocabulary
                              ├── /mfe/insights/    likho-mfe-insights    /insights
+                             │   (the shell's own /embed/recordings/:ref#token=… page mounts transcript's
+                             │    ./TranscriptPanel for another system's iframe, with a token from
+                             │    POST /api/v1/tokens/exchange instead of a session)
                              ├── /graphql /api/ /events/  likho-api
                              └── /media/           likho-media
 ```
