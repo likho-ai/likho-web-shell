@@ -92,5 +92,10 @@ describe('the search page', () => {
     await user.clear(box);
     await user.type(box, 'delivery{Enter}');
     await waitFor(() => expect(asked.at(-1)).toMatchObject({ query: 'delivery', page: 1 }));
+
+    // The same words again ask again: the index may have changed since.
+    const before = asked.length;
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+    await waitFor(() => expect(asked.length).toBe(before + 1));
   });
 });

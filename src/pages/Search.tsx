@@ -53,7 +53,9 @@ export function SearchPage() {
     if (values.q.trim()) fresh.set('q', values.q.trim());
     if (values.lang) fresh.set('lang', values.lang);
     if (values.page > 1) fresh.set('page', String(values.page));
-    setParams(fresh);
+    // The same words again: ask again (a line corrected a moment ago may have reached the index since).
+    if (fresh.toString() === params.toString()) void result.refetch();
+    else setParams(fresh);
   };
 
   return (
@@ -96,7 +98,7 @@ export function SearchPage() {
                 className="flex flex-col gap-2 p-4 sm:flex-row sm:items-start sm:gap-4"
               >
                 <Link
-                  to={`/recordings/${hit.recording.id}?t=${Math.floor(hit.startSeconds)}`}
+                  to={`/recordings/${hit.recording.id}?t=${Math.max(0, Math.round(hit.startSeconds * 100) / 100)}`}
                   className="shrink-0 font-mono text-sm text-accent hover:underline"
                   aria-label={`Open ${hit.recording.originalName} at ${clock(hit.startSeconds)}`}
                 >

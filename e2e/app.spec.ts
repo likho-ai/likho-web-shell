@@ -59,7 +59,7 @@ test('upload a call and read its transcript', async ({ page }) => {
 
   // The player loaded the waveform and the first timestamp seeks.
   await expect(page.getByTestId('waveform').locator('canvas').first()).toBeVisible({ timeout: 30_000 });
-  await lines.first().getByRole('button').click();
+  await lines.first().getByRole('button', { name: /^Play from/ }).click();
   await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible({ timeout: 15_000 });
   await page.getByRole('button', { name: 'Pause' }).click();
 
@@ -83,9 +83,13 @@ test('upload a call and read its transcript', async ({ page }) => {
   const results = page.getByRole('region', { name: 'Results' });
   await expect(results).toBeVisible({ timeout: 30_000 });
   const openAt = results.getByRole('link', { name: /^Open .* at / }).first();
-  await expect(openAt).toBeVisible();
+  // The corrected version reaches the index a moment after the correction: ask again until it is there.
+  await expect(async () => {
+    if (!(await openAt.isVisible())) await page.getByRole('button', { name: 'Search' }).click();
+    await expect(openAt).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 30_000 });
   const recordingId = recordingUrl.split('/').pop()!;
-  await expect(openAt).toHaveAttribute('href', new RegExp(`/recordings/${recordingId}\\?t=\\d+$`));
+  await expect(openAt).toHaveAttribute('href', new RegExp(`/recordings/${recordingId}\\?t=[\\d.]+$`));
   await openAt.click();
   await expect(page.getByRole('heading', { name: 'Transcript' })).toBeVisible();
   await expect(page.getByLabel('Transcript lines').locator('[aria-current="true"]')).toBeVisible({ timeout: 30_000 });
@@ -94,5 +98,5 @@ test('upload a call and read its transcript', async ({ page }) => {
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Delete this recording' }).click();
   await expect(page.getByRole('heading', { name: 'Recordings' })).toBeVisible();
-  await expect(page.getByRole('row').filter({ hasText: basename(file!) })).toHaveCount(0);
+  await expect(page.locator(`a[href="/recordings/${recordingId}"]`)).toHaveCount(0);
 });
