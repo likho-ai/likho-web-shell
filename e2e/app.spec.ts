@@ -100,3 +100,80 @@ test('upload a call and read its transcript', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Recordings' })).toBeVisible();
   await expect(page.locator(`a[href="/recordings/${recordingId}"]`)).toHaveCount(0);
 });
+
+/**
+ * An admin invites a viewer, who joins through the link and can only read; the admin changes
+ * the role and disables the person, and every step is in the audit log. Needs likho-api, the
+ * shell and the library and admin apps (no transcription).
+ */
+test('invite a viewer, change their role, and read the audit log', async ({ page, browser }) => {
+  page.on('pageerror', (error) => console.log(`[browser pageerror] ${error.message}`));
+  const stamp = Date.now().toString(36);
+  const viewerEmail = `viewer-${stamp}@example.test`;
+
+  await page.goto('/login');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('form', { name: 'Sign in' }).getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('heading', { name: 'Recordings' })).toBeVisible();
+
+  // The admin app: people, and an invitation whose link comes back to the admin.
+  await page.getByRole('link', { name: 'Admin' }).click();
+  await expect(page.getByRole('heading', { name: 'People' })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole('row').filter({ hasText: email })).toContainText('(you)');
+  const invite = page.getByRole('form', { name: 'Invite' });
+  await invite.getByLabel('Email').fill(viewerEmail);
+  await invite.getByLabel('Role').selectOption('viewer');
+  await invite.getByRole('button', { name: 'Invite' }).click();
+  const status = page.getByRole('status').filter({ hasText: viewerEmail });
+  await expect(status).toBeVisible();
+  const link = (await status.locator('code').textContent())!.trim();
+  expect(link).toMatch(/\/invite\/[A-Za-z0-9_-]{40,}$/);
+  await expect(page.getByRole('list', { name: 'Invitations sent' })).toContainText(viewerEmail);
+  if (shots) await page.screenshot({ path: `${shots}/admin-invited.png`, fullPage: true });
+
+  // The invited person, in a browser of their own: the link, a name, a password - signed in as a viewer.
+  const theirs = await browser.newContext();
+  const their = await theirs.newPage();
+  await their.goto(link);
+  await expect(their.getByRole('heading', { name: /^Join / })).toBeVisible({ timeout: 60_000 });
+  await expect(their.getByText(/invited as a viewer/)).toBeVisible();
+  await their.getByLabel('Your name').fill('Vee Viewer');
+  await their.getByLabel('Choose a password').fill(`viewer-${stamp}-pw`);
+  await their.getByRole('button', { name: 'Join and sign in' }).click();
+  await expect(their.getByRole('heading', { name: 'Recordings' })).toBeVisible();
+  await expect(their.getByRole('link', { name: 'Search' })).toBeVisible();
+  await expect(their.getByRole('button', { name: 'Upload call' })).toHaveCount(0);
+  await expect(their.getByRole('link', { name: 'Admin' })).toHaveCount(0);
+  await expect(their.getByRole('button', { name: 'Transcribe' })).toHaveCount(0);
+  if (shots) await their.screenshot({ path: `${shots}/viewer-recordings.png`, fullPage: true });
+  // The link is used up.
+  await their.goto(link);
+  await expect(their.getByRole('alert')).toContainText('This link does not work any more.');
+
+  // Back with the admin: the person is listed; a role change; then disabled - and signed out at once.
+  await page.reload();
+  const row = page.getByRole('row').filter({ hasText: viewerEmail });
+  await expect(row).toBeVisible({ timeout: 60_000 });
+  await row.getByLabel('Role of Vee Viewer').selectOption('member');
+  await expect(row.getByLabel('Role of Vee Viewer')).toHaveValue('member');
+  await their.goto('/recordings');
+  await expect(their.getByRole('button', { name: 'Upload call' })).toBeVisible({ timeout: 30_000 });
+
+  page.once('dialog', (dialog) => dialog.accept());
+  await row.getByRole('button', { name: 'Disable' }).click();
+  await expect(row.getByRole('button', { name: 'Enable' })).toBeVisible();
+  await their.goto('/recordings');
+  await expect(their.getByRole('heading', { name: 'Sign in' })).toBeVisible({ timeout: 30_000 });
+  await theirs.close();
+
+  // The audit log has every step, newest first.
+  const changes = page.getByRole('list', { name: 'Changes' });
+  await expect(changes).toBeVisible();
+  await page.getByRole('button', { name: 'People', exact: true }).click();
+  await expect(changes.getByRole('listitem').first()).toContainText(/user disabled/);
+  await expect(changes).toContainText(/user role changed/);
+  await expect(changes).toContainText(/user invited/);
+  await expect(changes).toContainText(viewerEmail);
+  if (shots) await page.screenshot({ path: `${shots}/admin-audit.png`, fullPage: true });
+});

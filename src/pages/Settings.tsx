@@ -1,38 +1,36 @@
+/** Your own settings: who you are, how the app looks, your password. The workspace's are under /admin. */
 import { Button } from '@likho-ai/ui';
-import {
-  useApiKeys,
-  useCreateApiKey,
-  useEngines,
-  useMe,
-  useRevokeApiKey,
-  useSettings,
-  useUpdateSettings,
-} from '@likho-ai/web-sdk';
+import { useChangePassword, useMe } from '@likho-ai/web-sdk';
 import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router';
+import { PasswordField } from '../components/PasswordField';
 import { useTheme, type Theme } from '../lib/theme';
+
+const ROLE_WORDS: Record<string, string> = {
+  admin: 'an admin: you manage people, keys and settings',
+  member: 'a member: you upload, transcribe and correct',
+  viewer: 'a viewer: you read, play and search',
+};
 
 export function SettingsPage() {
   const me = useMe();
-  const settings = useSettings();
-  const update = useUpdateSettings();
-  const engines = useEngines();
-  const keys = useApiKeys();
-  const createKey = useCreateApiKey();
-  const revokeKey = useRevokeApiKey();
+  const change = useChangePassword();
   const { theme, setTheme } = useTheme();
-  const [keyName, setKeyName] = useState('');
-  const [shownKey, setShownKey] = useState<string | null>(null);
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [changed, setChanged] = useState(false);
   const admin = me.data?.role === 'admin';
 
-  const makeKey = (event: FormEvent) => {
+  const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (!keyName.trim()) return;
-    createKey.mutate(
-      { name: keyName.trim() },
+    setChanged(false);
+    change.mutate(
+      { currentPassword: current, newPassword: next },
       {
-        onSuccess: (data) => {
-          setShownKey(data.createApiKey.key);
-          setKeyName('');
+        onSuccess: () => {
+          setChanged(true);
+          setCurrent('');
+          setNext('');
         },
       },
     );
@@ -44,44 +42,19 @@ export function SettingsPage() {
         <h1 className="text-3xl font-bold">Settings</h1>
         <p className="mt-2 text-ink-2">
           Workspace <span className="font-medium text-ink">{me.data?.workspace.name}</span>, signed in as{' '}
-          {me.data?.email} ({me.data?.role}).
+          {me.data?.email}, {ROLE_WORDS[me.data?.role ?? ''] ?? me.data?.role}.
+          {admin && (
+            <>
+              {' '}
+              People, API keys, the workspace settings and the audit log are under{' '}
+              <Link to="/admin" className="font-medium text-ink underline-offset-2 hover:underline">
+                Admin
+              </Link>
+              .
+            </>
+          )}
         </p>
       </div>
-
-      <section
-        className="rounded-card border border-line bg-surface p-6 shadow-card"
-        aria-labelledby="transcription"
-      >
-        <h2 id="transcription" className="text-xl font-bold">
-          Transcription
-        </h2>
-        <label className="mt-4 flex items-start gap-3">
-          <input
-            type="checkbox"
-            className="mt-1 size-5 accent-[var(--likho-accent)]"
-            checked={settings.data?.autoTranscribe ?? true}
-            disabled={!admin || settings.isPending || update.isPending}
-            onChange={(e) => update.mutate({ autoTranscribe: e.target.checked })}
-          />
-          <span>
-            <span className="font-medium">Transcribe every recording as soon as it is ready</span>
-            <span className="block text-sm text-ink-2">
-              Off: recordings wait until someone presses Transcribe.
-              {!admin && ' Only an admin can change this.'}
-            </span>
-          </span>
-        </label>
-        <p className="mt-4 text-sm text-ink-2">
-          Models the workers can run:{' '}
-          {(engines.data ?? []).map((e) => (
-            <span key={e.registryId} className="mr-2 font-mono text-xs">
-              {e.registryId}
-              {e.isDefault ? ' (default)' : ''}
-            </span>
-          ))}
-          {engines.isError && <span>not known right now (the transcription service is not answering).</span>}
-        </p>
-      </section>
 
       <section
         className="rounded-card border border-line bg-surface p-6 shadow-card"
@@ -105,58 +78,43 @@ export function SettingsPage() {
         </div>
       </section>
 
-      {admin && (
-        <section
-          className="rounded-card border border-line bg-surface p-6 shadow-card"
-          aria-labelledby="keys"
-        >
-          <h2 id="keys" className="text-xl font-bold">
-            API keys
-          </h2>
-          <p className="mt-1 text-sm text-ink-2">
-            For scripts and connectors: <code className="font-mono text-xs">Authorization: Bearer lk_…</code>{' '}
-            on the REST API (/api/docs).
-          </p>
-          <form onSubmit={makeKey} className="mt-4 flex flex-wrap gap-2">
-            <input
-              aria-label="Name of the new key"
-              value={keyName}
-              onChange={(e) => setKeyName(e.target.value)}
-              placeholder="dialer connector"
-              className="min-h-11 flex-1 rounded-input border border-line-strong bg-surface px-3 text-ink focus-visible:outline-accent"
-            />
-            <Button type="submit" variant="primary" disabled={createKey.isPending}>
-              Make a key
-            </Button>
-          </form>
-          {shownKey && (
-            <p className="mt-3 rounded-input bg-surface-2 px-3 py-2 text-sm">
-              Copy it now; it is not shown again: <code className="font-mono select-all">{shownKey}</code>
+      <section
+        className="rounded-card border border-line bg-surface p-6 shadow-card"
+        aria-labelledby="password"
+      >
+        <h2 id="password" className="text-xl font-bold">
+          Password
+        </h2>
+        <form onSubmit={submit} className="max-w-md" aria-label="Change password">
+          <PasswordField
+            id="current-password"
+            label="Current password"
+            autoComplete="current-password"
+            value={current}
+            onChange={setCurrent}
+          />
+          <PasswordField
+            id="new-password"
+            label="New password"
+            autoComplete="new-password"
+            value={next}
+            onChange={setNext}
+          />
+          {change.error && (
+            <p role="alert" className="mt-3 text-sm text-[var(--likho-status-failed-ink)]">
+              {change.error.message}
             </p>
           )}
-          <ul className="mt-4 divide-y divide-line text-sm">
-            {(keys.data ?? []).map((key) => (
-              <li key={key.id} className="flex items-center justify-between py-2">
-                <span>
-                  <span className="font-medium">{key.name}</span>
-                  <span className="ml-2 text-ink-3">
-                    {key.revokedAt
-                      ? 'revoked'
-                      : key.lastUsedAt
-                        ? `last used ${new Date(key.lastUsedAt).toLocaleString()}`
-                        : 'never used'}
-                  </span>
-                </span>
-                {!key.revokedAt && (
-                  <Button variant="ghost" size="sm" onClick={() => revokeKey.mutate({ id: key.id })}>
-                    Revoke
-                  </Button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+          {changed && (
+            <p role="status" className="mt-3 text-sm text-ink-2">
+              Your password is changed.
+            </p>
+          )}
+          <Button type="submit" className="mt-4" disabled={change.isPending}>
+            {change.isPending ? 'Saving…' : 'Change password'}
+          </Button>
+        </form>
+      </section>
     </div>
   );
 }

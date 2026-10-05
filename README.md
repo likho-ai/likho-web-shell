@@ -15,6 +15,7 @@ browser ── gateway (nginx) ──┬── /            likho-web-shell     
                              ├── /mfe/manifest.json              which remote entry each app is at (likho-infra)
                              ├── /mfe/library/     likho-mfe-library     /recordings
                              ├── /mfe/transcript/  likho-mfe-transcript  /recordings/:id
+                             ├── /mfe/admin/       likho-mfe-admin       /admin (admins)
                              ├── /graphql /api/ /events/  likho-api
                              └── /media/           likho-media
 ```
@@ -38,8 +39,15 @@ pnpm install
 pnpm dev          # http://localhost:5173, use it through http://localhost:8080
 ```
 
-In `likho-mfe-library` and `likho-mfe-transcript`: `pnpm dev` (5174 and 5175). The gateway proxies
-`/`, `/mfe/library/` and `/mfe/transcript/` to the three dev servers.
+In `likho-mfe-library`, `likho-mfe-transcript` and `likho-mfe-admin`: `pnpm dev` (5174, 5175 and
+5176). The gateway proxies `/`, `/mfe/library/`, `/mfe/transcript/` and `/mfe/admin/` to the four
+dev servers.
+
+The shell's own pages besides the home page: sign in (with "Forgotten your password?" →
+`/forgot`, which mails a link to `/reset/:token`), `/invite/:token` (the page an invitation link
+opens: whom it is for, a name, a password), search, vocabulary and settings (appearance and your
+own password; the workspace's settings, people, keys and the audit log are the admin app's).
+A viewer sees no upload button and no Admin section.
 
 ## Try it end to end
 

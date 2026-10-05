@@ -1,7 +1,7 @@
 import { Button, Mascot } from '@likho-ai/ui';
 import { useLogin, useMe } from '@likho-ai/web-sdk';
 import { useState, type FormEvent } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 
 export function LoginPage() {
   const me = useMe();
@@ -75,6 +75,11 @@ export function LoginPage() {
         <Button type="submit" variant="primary" className="mt-6 w-full" disabled={login.isPending}>
           {login.isPending ? 'Signing in…' : 'Sign in'}
         </Button>
+        <p className="mt-4 text-center text-sm">
+          <Link to="/forgot" className="text-ink-2 underline-offset-2 hover:underline">
+            Forgotten your password?
+          </Link>
+        </p>
       </form>
     </div>
   );

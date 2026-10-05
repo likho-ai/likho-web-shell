@@ -5,7 +5,9 @@ import { Layout, RequireSession } from './components/Layout';
 import { Remote } from './lib/remotes';
 import { ThemeProvider } from './lib/theme';
 import { HomePage } from './pages/Home';
+import { InvitePage } from './pages/Invite';
 import { LoginPage } from './pages/Login';
+import { ForgotPage, ResetPage } from './pages/Password';
 import { SearchPage } from './pages/Search';
 import { SettingsPage } from './pages/Settings';
 import { VocabularyPage } from './pages/Vocabulary';
@@ -43,6 +45,9 @@ export function App() {
             <Route element={<Layout />}>
               <Route index element={<HomePage />} />
               <Route path="login" element={<LoginPage />} />
+              <Route path="forgot" element={<ForgotPage />} />
+              <Route path="reset/:token" element={<ResetPage />} />
+              <Route path="invite/:token" element={<InvitePage />} />
               <Route element={<RequireSession />}>
                 <Route
                   path="recordings"
@@ -55,6 +60,7 @@ export function App() {
                 <Route path="search" element={<SearchPage />} />
                 <Route path="vocabulary" element={<VocabularyPage />} />
                 <Route path="settings" element={<SettingsPage />} />
+                <Route path="admin" element={<Remote name="admin" manifestUrl={config.manifestUrl} />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Route>

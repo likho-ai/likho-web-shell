@@ -1,6 +1,6 @@
 import { Button, Logo } from '@likho-ai/ui';
 import { useLogout, useMe } from '@likho-ai/web-sdk';
-import { BookOpenText, LogOut, Mic, Moon, Search, Settings, Sun, Upload } from 'lucide-react';
+import { BookOpenText, LogOut, Mic, Moon, Search, Settings, ShieldCheck, Sun, Upload } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router';
 import { useTheme } from '../lib/theme';
 
@@ -9,6 +9,7 @@ const links = [
   { to: '/search', label: 'Search', icon: Search },
   { to: '/vocabulary', label: 'Vocabulary', icon: BookOpenText },
   { to: '/settings', label: 'Settings', icon: Settings },
+  { to: '/admin', label: 'Admin', icon: ShieldCheck, role: 'admin' },
 ];
 
 /** The white pill at the top: logo, the sections, theme and the upload button. */
@@ -18,6 +19,9 @@ export function NavBar() {
   const navigate = useNavigate();
   const { effective, setTheme } = useTheme();
   const signedIn = Boolean(me.data);
+  const role = me.data?.role ?? '';
+  // A viewer reads: no upload button for them. Admin is a section only admins see.
+  const shown = links.filter((link) => !link.role || link.role === role);
 
   return (
     <header className="sticky top-0 z-20 px-4 pt-4 sm:px-6">
@@ -34,7 +38,7 @@ export function NavBar() {
         </NavLink>
         {signedIn && (
           <ul className="hidden items-center gap-1 sm:flex">
-            {links.map(({ to, label, icon: Icon }) => (
+            {shown.map(({ to, label, icon: Icon }) => (
               <li key={to}>
                 <NavLink
                   to={to}
@@ -62,10 +66,12 @@ export function NavBar() {
           </Button>
           {signedIn ? (
             <>
-              <Button variant="primary" onClick={() => navigate('/recordings?upload=1')}>
-                <Upload aria-hidden="true" />
-                Upload call
-              </Button>
+              {role !== 'viewer' && (
+                <Button variant="primary" onClick={() => navigate('/recordings?upload=1')}>
+                  <Upload aria-hidden="true" />
+                  Upload call
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"

@@ -2,7 +2,8 @@
  * The apps the shell loads at run time (Module Federation).
  *
  * /mfe/manifest.json names each app's remote entry:
- *   { "library": "/mfe/library/remoteEntry.js", "transcript": "/mfe/transcript/remoteEntry.js" }
+ *   { "library": "/mfe/library/remoteEntry.js", "transcript": "/mfe/transcript/remoteEntry.js",
+ *     "admin": "/mfe/admin/remoteEntry.js" }
  * Releasing or rolling back one app changes one line there. An app that cannot be loaded shows
  * a message in its area with a retry; the rest of the shell keeps working.
  */
@@ -10,11 +11,12 @@ import { loadRemote, registerRemotes } from '@module-federation/enhanced/runtime
 import { Button } from '@likho-ai/ui';
 import { Component, Suspense, use, type ComponentType, type ReactNode } from 'react';
 
-export type RemoteName = 'library' | 'transcript';
+export type RemoteName = 'library' | 'transcript' | 'admin';
 
 const DEFAULTS: Record<RemoteName, string> = {
   library: '/mfe/library/remoteEntry.js',
   transcript: '/mfe/transcript/remoteEntry.js',
+  admin: '/mfe/admin/remoteEntry.js',
 };
 
 let registered: Promise<Record<RemoteName, string>> | null = null;
