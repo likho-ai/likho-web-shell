@@ -10,7 +10,6 @@ import { LoginPage } from './pages/Login';
 import { ForgotPage, ResetPage } from './pages/Password';
 import { SearchPage } from './pages/Search';
 import { SettingsPage } from './pages/Settings';
-import { VocabularyPage } from './pages/Vocabulary';
 
 export const config = {
   apiOrigin: import.meta.env.VITE_API_ORIGIN || window.location.origin,
@@ -58,7 +57,10 @@ export function App() {
                   element={<Remote name="transcript" manifestUrl={config.manifestUrl} />}
                 />
                 <Route path="search" element={<SearchPage />} />
-                <Route path="vocabulary" element={<VocabularyPage />} />
+                <Route
+                  path="vocabulary"
+                  element={<Remote name="vocabulary" manifestUrl={config.manifestUrl} />}
+                />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="admin" element={<Remote name="admin" manifestUrl={config.manifestUrl} />} />
               </Route>

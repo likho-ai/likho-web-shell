@@ -1,7 +1,7 @@
 # likho-web-shell
 
 The Likho web app: the frame every screen lives in. Sign-in, the navigation bar, light and dark
-themes, the home page, the vocabulary and settings pages, and the loader for the apps that
+themes, the home page, the settings page, and the loader for the apps that
 come from their own repositories at run time.
 
 React 19, Vite 8, TypeScript, Tailwind CSS v4 with the [likho-ui](https://github.com/likho-ai/likho-ui)
@@ -11,11 +11,12 @@ tokens, [likho-web-sdk](https://github.com/likho-ai/likho-web-sdk) for the API, 
 ## How the apps fit together
 
 ```
-browser ── gateway (nginx) ──┬── /            likho-web-shell     the frame, sign-in, home, vocabulary, settings
+browser ── gateway (nginx) ──┬── /            likho-web-shell     the frame, sign-in, home, search, settings
                              ├── /mfe/manifest.json              which remote entry each app is at (likho-infra)
                              ├── /mfe/library/     likho-mfe-library     /recordings
                              ├── /mfe/transcript/  likho-mfe-transcript  /recordings/:id
                              ├── /mfe/admin/       likho-mfe-admin       /admin (admins)
+                             ├── /mfe/vocabulary/  likho-mfe-vocabulary  /vocabulary
                              ├── /graphql /api/ /events/  likho-api
                              └── /media/           likho-media
 ```
@@ -39,9 +40,9 @@ pnpm install
 pnpm dev          # http://localhost:5173, use it through http://localhost:8080
 ```
 
-In `likho-mfe-library`, `likho-mfe-transcript` and `likho-mfe-admin`: `pnpm dev` (5174, 5175 and
-5176). The gateway proxies `/`, `/mfe/library/`, `/mfe/transcript/` and `/mfe/admin/` to the four
-dev servers.
+In `likho-mfe-library`, `likho-mfe-transcript`, `likho-mfe-admin` and `likho-mfe-vocabulary`:
+`pnpm dev` (5174 to 5177). The gateway proxies `/`, `/mfe/library/`, `/mfe/transcript/`,
+`/mfe/admin/` and `/mfe/vocabulary/` to the five dev servers.
 
 The shell's own pages besides the home page: sign in (with "Forgotten your password?" →
 `/forgot`, which mails a link to `/reset/:token`), `/invite/:token` (the page an invitation link
