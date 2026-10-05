@@ -90,13 +90,13 @@ test('upload a call and read its transcript', async ({ page }) => {
   const recordingUrl = page.url().split('?')[0]!;
   await page.getByRole('link', { name: 'Search' }).click();
   await page.getByRole('searchbox', { name: 'Words to find' }).fill(word);
-  await page.getByRole('button', { name: 'Search' }).click();
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
   const results = page.getByRole('region', { name: 'Results' });
   await expect(results).toBeVisible({ timeout: 30_000 });
   const openAt = results.getByRole('link', { name: /^Open .* at / }).first();
   // The corrected version reaches the index a moment after the correction: ask again until it is there.
   await expect(async () => {
-    if (!(await openAt.isVisible())) await page.getByRole('button', { name: 'Search' }).click();
+    if (!(await openAt.isVisible())) await page.getByRole('button', { name: 'Search', exact: true }).click();
     await expect(openAt).toBeVisible({ timeout: 2_000 });
   }).toPass({ timeout: 30_000 });
   const recordingId = recordingUrl.split('/').pop()!;
@@ -263,7 +263,6 @@ test('a name added to the vocabulary is heard in the next transcription', async 
  */
 test('every sale call of one agent last week with a word is one search', async ({ page }) => {
   test.skip(!file, 'LIKHO_E2E_FILE is not set');
-  const word = process.env.LIKHO_E2E_TERM ?? 'अश्वगंधा';
   page.on('pageerror', (error) => console.log(`[browser pageerror] ${error.message}`));
   const stamp = Date.now().toString(36);
   const agent = `agent-${stamp}`;
@@ -321,6 +320,24 @@ test('every sale call of one agent last week with a word is one search', async (
     await page.screenshot({ path: `${shots}/library-narrowed.png` });
   }
 
+  // A word the transcript really has (the model's spelling of a name varies from run to run):
+  // the most frequent Devanagari word of four letters or more.
+  const transcript = await (
+    await page.request.post('/graphql', {
+      data: {
+        query: `query ($id: String!) { recording(id: $id) { latestTranscript { segments { textScript } } } }`,
+        variables: { id: recordingId },
+      },
+    })
+  ).json();
+  const counts = new Map<string, number>();
+  for (const segment of transcript.data.recording.latestTranscript.segments as { textScript: string }[]) {
+    for (const token of segment.textScript.split(/[\s,.?!।]+/)) {
+      if (/^[ऀ-ॿ]{4,}$/.test(token)) counts.set(token, (counts.get(token) ?? 0) + 1);
+    }
+  }
+  const word = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]![0];
+
   // One search: the word, the campaign, the agent, the last seven days.
   const weekAgo = new Date(Date.now() - 7 * 86_400_000);
   const from = `${weekAgo.getFullYear()}-${pad(weekAgo.getMonth() + 1)}-${pad(weekAgo.getDate())}`;
@@ -328,32 +345,34 @@ test('every sale call of one agent last week with a word is one search', async (
   const results = page.getByRole('region', { name: 'Results' });
   await expect(async () => {
     if (!(await results.getByRole('link', { name: name }).first().isVisible())) {
-      await page.getByRole('button', { name: 'Search' }).click();
+      await page.getByRole('button', { name: 'Search', exact: true }).click();
     }
     await expect(results.getByRole('link', { name: name }).first()).toBeVisible({ timeout: 2_000 });
   }).toPass({ timeout: 60_000 });
   await expect(results.getByText(`campaign: sale`).first()).toBeVisible();
   if (shots) await page.screenshot({ path: `${shots}/search-narrowed.png` });
-  // Another campaign: nothing.
-  await page.getByRole('combobox', { name: 'Campaign' }).selectOption('support');
-  await expect(page.getByText(new RegExp(`Nothing for`))).toBeVisible({ timeout: 30_000 });
+  // Another campaign (one no call has, so it is not in the choices): nothing.
+  await page.goto(
+    `/search?q=${encodeURIComponent(word)}&campaign=support-${stamp}&agent=${agent}&from=${from}`,
+  );
+  await expect(page.getByText(/Nothing for/)).toBeVisible({ timeout: 30_000 });
 
   // Kept for later, and opened from its chip.
-  await page.getByRole('combobox', { name: 'Campaign' }).selectOption('sale');
-  await page.getByRole('combobox', { name: 'Agent' }).selectOption(agent);
+  await page.goto(`/search?q=${encodeURIComponent(word)}&campaign=sale&agent=${agent}&from=${from}`);
+  await expect(results.getByRole('link', { name: name }).first()).toBeVisible({ timeout: 30_000 });
   await page.getByRole('button', { name: 'Save this search' }).click();
-  await page.getByLabel('Name').fill(`sales of ${agent}`);
+  await page.getByRole('textbox', { name: 'Name', exact: true }).fill(`sales of ${agent}`);
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  const chip = page.getByRole('button', { name: `sales of ${agent}` });
+  const chip = page.getByRole('button', { name: `sales of ${agent}`, exact: true });
   await expect(chip).toBeVisible();
   await page.goto('/search');
-  await page.getByRole('button', { name: `sales of ${agent}` }).click();
+  await page.getByRole('button', { name: `sales of ${agent}`, exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`campaign=sale&agent=${agent}`));
   await expect(results.getByRole('link', { name: name }).first()).toBeVisible({ timeout: 30_000 });
 
   // Clean up: the saved search and the recording.
   await page.getByRole('button', { name: `Remove saved search sales of ${agent}` }).click();
-  await expect(page.getByRole('button', { name: `sales of ${agent}` })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: `sales of ${agent}`, exact: true })).toHaveCount(0);
   await page.goto(`/recordings/${recordingId}`);
   await expect(page.getByRole('heading', { name: 'Transcript' })).toBeVisible({ timeout: 60_000 });
   page.once('dialog', (dialog) => dialog.accept());
