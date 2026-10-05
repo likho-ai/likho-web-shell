@@ -16,7 +16,8 @@ test('upload a call and read its transcript', async ({ page }) => {
 
   // What the browser logs is the first clue when a step fails.
   page.on('console', (message) => {
-    if (message.type() === 'error' || message.type() === 'warning') console.log(`[browser ${message.type()}] ${message.text()}`);
+    if (message.type() === 'error' || message.type() === 'warning')
+      console.log(`[browser ${message.type()}] ${message.text()}`);
   });
   page.on('pageerror', (error) => console.log(`[browser pageerror] ${error.message}`));
 
@@ -38,7 +39,10 @@ test('upload a call and read its transcript', async ({ page }) => {
   if (shots) await page.screenshot({ path: `${shots}/recordings-uploaded.png`, fullPage: true });
 
   // The row appears with a live status, and ends as Done without a reload.
-  const row = page.getByRole('row').filter({ hasText: basename(file!) }).first();
+  const row = page
+    .getByRole('row')
+    .filter({ hasText: basename(file!) })
+    .first();
   await expect(row).toBeVisible();
   await expect(row.getByText('Done')).toBeVisible({ timeout: 240_000 });
 
@@ -59,13 +63,19 @@ test('upload a call and read its transcript', async ({ page }) => {
 
   // The player loaded the waveform and the first timestamp seeks.
   await expect(page.getByTestId('waveform').locator('canvas').first()).toBeVisible({ timeout: 30_000 });
-  await lines.first().getByRole('button', { name: /^Play from/ }).click();
+  await lines
+    .first()
+    .getByRole('button', { name: /^Play from/ })
+    .click();
   await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible({ timeout: 15_000 });
   await page.getByRole('button', { name: 'Pause' }).click();
 
   // A correction: the Hinglish of the first line gets a word of its own; the new version shows it.
   const marker = `zxq${Date.now().toString(36)}`;
-  await lines.first().getByRole('button', { name: /^Correct the Hinglish/ }).click();
+  await lines
+    .first()
+    .getByRole('button', { name: /^Correct the Hinglish/ })
+    .click();
   const box = page.getByRole('textbox', { name: /^Correct the Hinglish/ });
   await box.press('End');
   await box.type(` ${marker}`);
@@ -92,7 +102,9 @@ test('upload a call and read its transcript', async ({ page }) => {
   await expect(openAt).toHaveAttribute('href', new RegExp(`/recordings/${recordingId}\\?t=[\\d.]+$`));
   await openAt.click();
   await expect(page.getByRole('heading', { name: 'Transcript' })).toBeVisible();
-  await expect(page.getByLabel('Transcript lines').locator('[aria-current="true"]')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByLabel('Transcript lines').locator('[aria-current="true"]')).toBeVisible({
+    timeout: 30_000,
+  });
 
   // Clean up: the recording and its audio.
   page.once('dialog', (dialog) => dialog.accept());
@@ -176,4 +188,67 @@ test('invite a viewer, change their role, and read the audit log', async ({ page
   await expect(changes).toContainText(/user invited/);
   await expect(changes).toContainText(viewerEmail);
   if (shots) await page.screenshot({ path: `${shots}/admin-audit.png`, fullPage: true });
+});
+
+/**
+ * A name added to the vocabulary is heard in the next transcription, and its count rises. Needs
+ * the four services, likho-api, the shell and the library, transcript and vocabulary apps, and
+ * LIKHO_E2E_FILE: a recording in which LIKHO_E2E_TERM (default अश्वगंधा) is spoken.
+ */
+test('a name added to the vocabulary is heard in the next transcription', async ({ page }) => {
+  test.skip(!file, 'LIKHO_E2E_FILE is not set');
+  const term = process.env.LIKHO_E2E_TERM ?? 'अश्वगंधा';
+  page.on('pageerror', (error) => console.log(`[browser pageerror] ${error.message}`));
+
+  await page.goto('/login');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('form', { name: 'Sign in' }).getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('heading', { name: 'Recordings' })).toBeVisible();
+
+  // The vocabulary app: the name goes in (or stays, from an earlier run), with its count so far.
+  await page.getByRole('link', { name: 'Vocabulary' }).click();
+  await expect(page.getByRole('heading', { name: 'Glossary' })).toBeVisible({ timeout: 60_000 });
+  const glossary = () => page.getByRole('heading', { name: 'Glossary' }).locator('xpath=ancestor::section');
+  await glossary().getByLabel('New glossary name').fill(term);
+  await glossary().getByLabel('Note').fill('e2e');
+  await glossary().getByRole('button', { name: 'Add' }).click();
+  const heard = () => glossary().getByLabel(new RegExp(`^${term} heard \\d+ times$`));
+  await expect(heard()).toBeVisible();
+  const before = Number((await heard().textContent())!.trim());
+  if (shots) await page.screenshot({ path: `${shots}/vocabulary-before.png` });
+
+  // A call in which the name is spoken; the worker listens for it as a hotword.
+  await page.getByRole('link', { name: 'Recordings' }).click();
+  await page.getByRole('main').getByRole('button', { name: 'Upload call' }).click();
+  await page.getByLabel('Choose files').setInputFiles(file!);
+  await expect(page.getByLabel('Upload queue').getByText('Uploaded — open')).toBeVisible({ timeout: 60_000 });
+  const row = page
+    .getByRole('row')
+    .filter({ hasText: basename(file!) })
+    .first();
+  await expect(row.getByText('Done')).toBeVisible({ timeout: 240_000 });
+  const recordingId = (await row.getByRole('link', { name: 'Open' }).getAttribute('href'))!.split('/').pop()!;
+
+  // likho-language counted the lines as the worker published them: the count rose.
+  await page.getByRole('link', { name: 'Vocabulary' }).click();
+  await expect(async () => {
+    await page.reload();
+    await expect(heard()).toBeVisible({ timeout: 10_000 });
+    expect(Number((await heard().textContent())!.trim())).toBeGreaterThan(before);
+  }).toPass({ timeout: 60_000 });
+  await expect(glossary().getByRole('row').filter({ hasText: term })).toContainText('just now');
+  if (shots) await page.screenshot({ path: `${shots}/vocabulary-heard.png` });
+
+  // Clean up: the recording and the name.
+  await page.goto(`/recordings/${recordingId}`);
+  await expect(page.getByRole('heading', { name: 'Transcript' })).toBeVisible({ timeout: 60_000 });
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Delete this recording' }).click();
+  await expect(page.getByRole('heading', { name: 'Recordings' })).toBeVisible();
+  await page.getByRole('link', { name: 'Vocabulary' }).click();
+  await glossary()
+    .getByRole('button', { name: `Remove ${term}` })
+    .click();
+  await expect(heard()).toHaveCount(0);
 });
