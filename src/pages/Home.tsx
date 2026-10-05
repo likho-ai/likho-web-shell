@@ -1,6 +1,7 @@
 import { Button, Mascot } from '@likho-ai/ui';
 import { useMe } from '@likho-ai/web-sdk';
 import { Link } from 'react-router';
+import { Yesterday } from '../components/Yesterday';
 
 const steps = [
   { title: 'Upload', body: 'A call recording in any format. From the browser, a script, or the dialer.' },
@@ -24,6 +25,7 @@ export function HomePage() {
   const me = useMe();
   return (
     <div className="space-y-16">
+      {me.data && <Yesterday />}
       <section className="grid items-center gap-10 md:grid-cols-[1.2fr_1fr]">
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-eyebrow">
