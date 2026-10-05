@@ -63,9 +63,19 @@ test('upload a call and read its transcript', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible({ timeout: 15_000 });
   await page.getByRole('button', { name: 'Pause' }).click();
 
-  // Search finds a word of the transcript and opens the line at its moment.
-  const firstLine = (await lines.first().locator('p').first().innerText()).trim();
-  const word = firstLine.split(/\s+/).find((w) => /^[a-z]{4,}$/i.test(w)) ?? firstLine.split(/\s+/)[0]!;
+  // A correction: the Hinglish of the first line gets a word of its own; the new version shows it.
+  const marker = `zxq${Date.now().toString(36)}`;
+  await lines.first().getByRole('button', { name: /^Correct the Hinglish/ }).click();
+  const box = page.getByRole('textbox', { name: /^Correct the Hinglish/ });
+  await box.press('End');
+  await box.type(` ${marker}`);
+  await box.press('Enter');
+  await expect(lines.first().getByText('corrected')).toBeVisible({ timeout: 30_000 });
+  await expect(lines.first()).toContainText(marker);
+
+  // Search finds a word of the transcript - the corrected one - and opens the line at its moment.
+  const firstLine = marker;
+  const word = firstLine;
   const recordingUrl = page.url().split('?')[0]!;
   await page.getByRole('link', { name: 'Search' }).click();
   await page.getByRole('searchbox', { name: 'Words to find' }).fill(word);
