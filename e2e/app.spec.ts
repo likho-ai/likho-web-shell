@@ -4,6 +4,7 @@
  * LIKHO_E2E_FILE (a recording on this machine; it is deleted from Likho at the end).
  */
 import { expect, test } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 
 const email = process.env.LIKHO_E2E_EMAIL ?? 'admin@example.com';
@@ -251,4 +252,111 @@ test('a name added to the vocabulary is heard in the next transcription', async 
     .getByRole('button', { name: `Remove ${term}` })
     .click();
   await expect(heard()).toHaveCount(0);
+});
+
+/**
+ * "Every sale call of agent X last week with the word …" is one search: a call arrives with its
+ * facts (as a connector sends them), is transcribed, and the search and the library narrow by
+ * campaign, agent and the days; the search is kept for later. Needs the four services, likho-api,
+ * the shell and the library and transcript apps, and LIKHO_E2E_FILE (a recording in which
+ * LIKHO_E2E_TERM, default अश्वगंधा, is spoken).
+ */
+test('every sale call of one agent last week with a word is one search', async ({ page }) => {
+  test.skip(!file, 'LIKHO_E2E_FILE is not set');
+  const word = process.env.LIKHO_E2E_TERM ?? 'अश्वगंधा';
+  page.on('pageerror', (error) => console.log(`[browser pageerror] ${error.message}`));
+  const stamp = Date.now().toString(36);
+  const agent = `agent-${stamp}`;
+
+  await page.goto('/login');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('form', { name: 'Sign in' }).getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('heading', { name: 'Recordings' })).toBeVisible();
+
+  // The call comes with its facts, the way a connector sends them: three days ago, a sale by this agent.
+  const threeDaysAgo = new Date(Date.now() - 3 * 86_400_000);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const callTime = `${threeDaysAgo.getFullYear()}-${pad(threeDaysAgo.getMonth() + 1)}-${pad(threeDaysAgo.getDate())} 10:15:00`;
+  const bytes = await readFile(file!);
+  const name = `sale-${stamp}.mp3`;
+  const ticket = await (
+    await page.request.post('/graphql', {
+      data: {
+        query: `mutation ($input: RequestUploadInput!) { requestUpload(input: $input) { uploadUrl recording { id } } }`,
+        variables: {
+          input: {
+            originalName: name,
+            sizeBytes: bytes.byteLength,
+            attributes: [
+              { key: 'campaign', value: 'sale' },
+              { key: 'agent', value: agent },
+              { key: 'disposition', value: 'sold' },
+              { key: 'callTime', value: callTime },
+            ],
+          },
+        },
+      },
+    })
+  ).json();
+  const recordingId: string = ticket.data.requestUpload.recording.id;
+  const put = await page.request.put(ticket.data.requestUpload.uploadUrl, {
+    data: bytes,
+    headers: { 'content-type': 'audio/mpeg' },
+  });
+  expect(put.ok()).toBeTruthy();
+
+  // The library shows the facts and narrows by them; the call is transcribed meanwhile.
+  await page.goto(`/recordings?campaign=sale&agent=${agent}`);
+  const row = page.getByRole('row').filter({ hasText: name }).first();
+  await expect(row).toBeVisible({ timeout: 60_000 });
+  await expect(row).toContainText('sale');
+  await expect(row).toContainText(agent);
+  await expect(row.getByText('Done')).toBeVisible({ timeout: 240_000 });
+  await page.goto(`/recordings?campaign=support`);
+  await expect(page.getByRole('row').filter({ hasText: name })).toHaveCount(0);
+  if (shots) {
+    await page.goto(`/recordings?campaign=sale&agent=${agent}`);
+    await expect(page.getByRole('row').filter({ hasText: name }).first()).toBeVisible();
+    await page.screenshot({ path: `${shots}/library-narrowed.png` });
+  }
+
+  // One search: the word, the campaign, the agent, the last seven days.
+  const weekAgo = new Date(Date.now() - 7 * 86_400_000);
+  const from = `${weekAgo.getFullYear()}-${pad(weekAgo.getMonth() + 1)}-${pad(weekAgo.getDate())}`;
+  await page.goto(`/search?q=${encodeURIComponent(word)}&campaign=sale&agent=${agent}&from=${from}`);
+  const results = page.getByRole('region', { name: 'Results' });
+  await expect(async () => {
+    if (!(await results.getByRole('link', { name: name }).first().isVisible())) {
+      await page.getByRole('button', { name: 'Search' }).click();
+    }
+    await expect(results.getByRole('link', { name: name }).first()).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 60_000 });
+  await expect(results.getByText(`campaign: sale`).first()).toBeVisible();
+  if (shots) await page.screenshot({ path: `${shots}/search-narrowed.png` });
+  // Another campaign: nothing.
+  await page.getByRole('combobox', { name: 'Campaign' }).selectOption('support');
+  await expect(page.getByText(new RegExp(`Nothing for`))).toBeVisible({ timeout: 30_000 });
+
+  // Kept for later, and opened from its chip.
+  await page.getByRole('combobox', { name: 'Campaign' }).selectOption('sale');
+  await page.getByRole('combobox', { name: 'Agent' }).selectOption(agent);
+  await page.getByRole('button', { name: 'Save this search' }).click();
+  await page.getByLabel('Name').fill(`sales of ${agent}`);
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  const chip = page.getByRole('button', { name: `sales of ${agent}` });
+  await expect(chip).toBeVisible();
+  await page.goto('/search');
+  await page.getByRole('button', { name: `sales of ${agent}` }).click();
+  await expect(page).toHaveURL(new RegExp(`campaign=sale&agent=${agent}`));
+  await expect(results.getByRole('link', { name: name }).first()).toBeVisible({ timeout: 30_000 });
+
+  // Clean up: the saved search and the recording.
+  await page.getByRole('button', { name: `Remove saved search sales of ${agent}` }).click();
+  await expect(page.getByRole('button', { name: `sales of ${agent}` })).toHaveCount(0);
+  await page.goto(`/recordings/${recordingId}`);
+  await expect(page.getByRole('heading', { name: 'Transcript' })).toBeVisible({ timeout: 60_000 });
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Delete this recording' }).click();
+  await expect(page.getByRole('heading', { name: 'Recordings' })).toBeVisible();
 });

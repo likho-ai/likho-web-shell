@@ -1,6 +1,17 @@
 import { Button, Tag } from '@likho-ai/ui';
-import { clock, useSearch, type SearchFilter } from '@likho-ai/web-sdk';
-import { ChevronLeft, ChevronRight, Search as SearchIcon } from 'lucide-react';
+import {
+  clock,
+  useDeleteSavedSearch,
+  useMe,
+  useRecordingFacets,
+  useSaveSearch,
+  useSavedSearches,
+  useSearch,
+  type FacetValue,
+  type SavedSearch,
+  type SearchFilter,
+} from '@likho-ai/web-sdk';
+import { Bookmark, ChevronLeft, ChevronRight, Search as SearchIcon, X } from 'lucide-react';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
 
@@ -13,6 +24,48 @@ const LANGUAGES: { code: string; label: string }[] = [
   { code: 'ur', label: 'Urdu' },
   { code: 'en', label: 'English' },
 ];
+
+/** What narrows a search besides the words: everything lives in the address, so it can be shared. */
+export interface Narrowing {
+  lang: string;
+  campaign: string;
+  agent: string;
+  disposition: string;
+  from: string; // a date, YYYY-MM-DD, on the call time
+  to: string;
+}
+
+const EMPTY: Narrowing = { lang: '', campaign: '', agent: '', disposition: '', from: '', to: '' };
+
+/** The filter the API takes, from the narrowing: dates become the day's first and last moment. */
+export function toFilter(n: Narrowing): SearchFilter {
+  const filter: SearchFilter = {};
+  if (n.lang) filter.language = n.lang;
+  if (n.campaign) filter.campaign = n.campaign;
+  if (n.agent) filter.agent = n.agent;
+  if (n.disposition) filter.disposition = n.disposition;
+  if (n.from) filter.callSince = new Date(`${n.from}T00:00:00`).toISOString();
+  if (n.to) filter.callUntil = new Date(`${n.to}T23:59:59.999`).toISOString();
+  return filter;
+}
+
+/** Back from a saved filter into the address's words. */
+export function fromSaved(filter: SavedSearch['filter']): Narrowing {
+  const day = (iso: string | null | undefined) => {
+    if (!iso) return '';
+    const date = new Date(iso);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  };
+  return {
+    lang: filter.language ?? '',
+    campaign: filter.campaign ?? '',
+    agent: filter.agent ?? '',
+    disposition: filter.disposition ?? '',
+    from: day(filter.callSince),
+    to: day(filter.callUntil),
+  };
+}
 
 /**
  * Renders a line with its matches marked. likho-search wraps each match in <mark>…</mark> and
@@ -35,23 +88,33 @@ export function Marked({ text, lang }: { text: string; lang?: string }) {
   return <span lang={lang}>{parts}</span>;
 }
 
-/** Every transcript line of the workspace, found by a few words in either layer. */
+/** Every transcript line of the workspace, found by a few words in either layer, narrowed by the facts of the call. */
 export function SearchPage() {
   const [params, setParams] = useSearchParams();
   const query = params.get('q') ?? '';
-  const language = params.get('lang') ?? '';
   const page = Math.max(1, Number(params.get('page') ?? 1) || 1);
-
-  const filter: SearchFilter = language ? { language } : {};
+  const narrowing: Narrowing = {
+    lang: params.get('lang') ?? '',
+    campaign: params.get('campaign') ?? '',
+    agent: params.get('agent') ?? '',
+    disposition: params.get('disposition') ?? '',
+    from: params.get('from') ?? '',
+    to: params.get('to') ?? '',
+  };
+  const filter = toFilter(narrowing);
   const result = useSearch(query, filter, page, PAGE_SIZE);
+  const me = useMe();
+  const canChange = me.data ? me.data.role !== 'viewer' : false;
   const data = result.data;
   const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
 
-  const go = (next: { q?: string; lang?: string; page?: number }) => {
-    const values = { q: next.q ?? query, lang: next.lang ?? language, page: next.page ?? 1 };
+  const go = (next: Partial<Narrowing> & { q?: string; page?: number }) => {
+    const values = { ...narrowing, ...next, q: next.q ?? query, page: next.page ?? 1 };
     const fresh = new URLSearchParams();
     if (values.q.trim()) fresh.set('q', values.q.trim());
-    if (values.lang) fresh.set('lang', values.lang);
+    for (const key of ['lang', 'campaign', 'agent', 'disposition', 'from', 'to'] as const) {
+      if (values[key]) fresh.set(key, values[key]);
+    }
     if (values.page > 1) fresh.set('page', String(values.page));
     // The same words again: ask again (a line corrected a moment ago may have reached the index since).
     if (fresh.toString() === params.toString()) void result.refetch();
@@ -64,7 +127,7 @@ export function SearchPage() {
         <h1 className="text-3xl font-bold">Search</h1>
         <p className="mt-2 max-w-2xl text-ink-2">
           Every line of every call. Type a few words in Hinglish or Devanagari; spellings close to yours count
-          too.
+          too. Narrow it to a campaign, an agent, a disposition or the days the calls were made.
         </p>
       </div>
 
@@ -72,9 +135,15 @@ export function SearchPage() {
       <SearchForm
         key={query}
         initial={query}
-        language={language}
+        narrowing={narrowing}
         onSearch={(q) => go({ q, page: 1 })}
-        onLanguage={(lang) => go({ lang, page: 1 })}
+        onNarrow={(next) => go({ ...next, page: 1 })}
+      />
+
+      <SavedSearches
+        current={{ query, narrowing }}
+        canChange={canChange}
+        onOpen={(saved) => go({ q: saved.query, ...fromSaved(saved.filter), page: 1 })}
       />
 
       {!query && <p className="text-ink-2">Start with a word or two.</p>}
@@ -118,11 +187,14 @@ export function SearchPage() {
                       {hit.recording.originalName}
                     </Link>
                     {hit.recording.externalId && <Tag>{hit.recording.externalId}</Tag>}
-                    {hit.recording.attributes.slice(0, 3).map((attribute) => (
-                      <Tag key={attribute.key}>
-                        {attribute.key}: {attribute.value}
-                      </Tag>
-                    ))}
+                    {hit.recording.attributes
+                      .filter((attribute) => ['campaign', 'agent', 'disposition'].includes(attribute.key))
+                      .map((attribute) => (
+                        <Tag key={attribute.key}>
+                          {attribute.key}: {attribute.value}
+                        </Tag>
+                      ))}
+                    <span>{new Date(hit.recording.callTime).toLocaleDateString()}</span>
                   </p>
                 </div>
               </li>
@@ -149,18 +221,64 @@ export function SearchPage() {
   );
 }
 
+/** A select over the values a fact takes, with counts; "Any" when nothing is chosen. */
+function FactSelect({
+  label,
+  value,
+  values,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  values: FacetValue[] | undefined;
+  onChange: (value: string) => void;
+}) {
+  const known = values ?? [];
+  // A value from the address that the counts do not list (narrowed away) is still shown.
+  const options = value && !known.some((v) => v.value === value) ? [{ value, count: 0 }, ...known] : known;
+  return (
+    <label className="flex items-center gap-2 text-sm text-ink-2">
+      <span className="sr-only">{label}</span>
+      <select
+        className={input}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        aria-label={label}
+      >
+        <option value="">Any {label.toLowerCase()}</option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.value}
+            {option.count ? ` (${option.count})` : ''}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 function SearchForm({
   initial,
-  language,
+  narrowing,
   onSearch,
-  onLanguage,
+  onNarrow,
 }: {
   initial: string;
-  language: string;
+  narrowing: Narrowing;
   onSearch: (query: string) => void;
-  onLanguage: (language: string) => void;
+  onNarrow: (next: Partial<Narrowing>) => void;
 }) {
   const [draft, setDraft] = useState(initial);
+  const campaigns = useRecordingFacets('campaign');
+  const agents = useRecordingFacets(
+    'agent',
+    narrowing.campaign ? { campaign: narrowing.campaign } : undefined,
+  );
+  const dispositions = useRecordingFacets(
+    'disposition',
+    narrowing.campaign ? { campaign: narrowing.campaign } : undefined,
+  );
+  const narrowed = Object.values(narrowing).some(Boolean);
   const submit = (event: FormEvent) => {
     event.preventDefault();
     onSearch(draft);
@@ -169,33 +287,185 @@ function SearchForm({
     <form
       onSubmit={submit}
       aria-label="Search transcripts"
-      className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4 shadow-card sm:flex-row sm:items-center"
+      className="space-y-3 rounded-card border border-line bg-surface p-4 shadow-card"
     >
-      <label className="flex flex-1 items-center gap-2">
-        <SearchIcon aria-hidden="true" className="size-5 shrink-0 text-ink-3" />
-        <span className="sr-only">Words to find</span>
-        <input
-          className={`${input} w-full`}
-          type="search"
-          placeholder="order confirm, delivery, namaskar…"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          autoFocus
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <label className="flex flex-1 items-center gap-2">
+          <SearchIcon aria-hidden="true" className="size-5 shrink-0 text-ink-3" />
+          <span className="sr-only">Words to find</span>
+          <input
+            className={`${input} w-full`}
+            type="search"
+            placeholder="order confirm, delivery, namaskar…"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            autoFocus
+          />
+        </label>
+        <label className="flex items-center gap-2 text-sm text-ink-2">
+          <span className="sr-only">Language</span>
+          <select
+            className={input}
+            value={narrowing.lang}
+            onChange={(event) => onNarrow({ lang: event.target.value })}
+          >
+            {LANGUAGES.map((option) => (
+              <option key={option.code} value={option.code}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Button type="submit" variant="primary" disabled={!draft.trim()}>
+          Search
+        </Button>
+      </div>
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Narrow the search">
+        <FactSelect
+          label="Campaign"
+          value={narrowing.campaign}
+          values={campaigns.data}
+          onChange={(campaign) => onNarrow({ campaign, agent: '', disposition: '' })}
         />
-      </label>
-      <label className="flex items-center gap-2 text-sm text-ink-2">
-        <span className="sr-only">Language</span>
-        <select className={input} value={language} onChange={(event) => onLanguage(event.target.value)}>
-          {LANGUAGES.map((option) => (
-            <option key={option.code} value={option.code}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <Button type="submit" variant="primary" disabled={!draft.trim()}>
-        Search
-      </Button>
+        <FactSelect
+          label="Agent"
+          value={narrowing.agent}
+          values={agents.data}
+          onChange={(agent) => onNarrow({ agent })}
+        />
+        <FactSelect
+          label="Disposition"
+          value={narrowing.disposition}
+          values={dispositions.data}
+          onChange={(disposition) => onNarrow({ disposition })}
+        />
+        <label className="flex items-center gap-2 text-sm text-ink-2">
+          From
+          <input
+            type="date"
+            aria-label="Calls from"
+            className={input}
+            value={narrowing.from}
+            max={narrowing.to || undefined}
+            onChange={(event) => onNarrow({ from: event.target.value })}
+          />
+        </label>
+        <label className="flex items-center gap-2 text-sm text-ink-2">
+          To
+          <input
+            type="date"
+            aria-label="Calls up to"
+            className={input}
+            value={narrowing.to}
+            min={narrowing.from || undefined}
+            onChange={(event) => onNarrow({ to: event.target.value })}
+          />
+        </label>
+        {narrowed && (
+          <Button type="button" variant="ghost" size="sm" onClick={() => onNarrow(EMPTY)}>
+            <X aria-hidden="true" className="size-4" />
+            Clear
+          </Button>
+        )}
+      </div>
     </form>
   );
+}
+
+/** The searches kept for later, and a way to keep the current one. */
+function SavedSearches({
+  current,
+  canChange,
+  onOpen,
+}: {
+  current: { query: string; narrowing: Narrowing };
+  canChange: boolean;
+  onOpen: (saved: SavedSearch) => void;
+}) {
+  const saved = useSavedSearches();
+  const save = useSaveSearch();
+  const remove = useDeleteSavedSearch();
+  const me = useMe();
+  const [naming, setNaming] = useState(false);
+  const [name, setName] = useState('');
+  const list = saved.data ?? [];
+  if (list.length === 0 && !(canChange && current.query)) return null;
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!name.trim()) return;
+    save.mutate(
+      { name: name.trim(), query: current.query, filter: toFilter(current.narrowing) },
+      {
+        onSuccess: () => {
+          setName('');
+          setNaming(false);
+        },
+      },
+    );
+  };
+
+  return (
+    <section aria-label="Saved searches" className="flex flex-wrap items-center gap-2">
+      {list.map((entry) => (
+        <span key={entry.id} className="inline-flex items-center gap-1">
+          <Button variant="secondary" size="sm" onClick={() => onOpen(entry)} title={describe(entry)}>
+            <Bookmark aria-hidden="true" className="size-4" />
+            {entry.name}
+          </Button>
+          {canChange && (me.data?.role === 'admin' || entry.createdBy === me.data?.id) && (
+            <button
+              type="button"
+              aria-label={`Remove saved search ${entry.name}`}
+              className="rounded-full p-1 text-ink-3 hover:bg-surface-2"
+              onClick={() => remove.mutate({ id: entry.id })}
+            >
+              <X aria-hidden="true" className="size-3.5" />
+            </button>
+          )}
+        </span>
+      ))}
+      {canChange && current.query && !naming && (
+        <Button variant="ghost" size="sm" onClick={() => setNaming(true)}>
+          Save this search
+        </Button>
+      )}
+      {naming && (
+        <form onSubmit={submit} className="flex items-center gap-2" aria-label="Name the search">
+          <input
+            aria-label="Name"
+            className={`${input} min-h-9`}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="refunds, sales, last week"
+            autoFocus
+          />
+          <Button type="submit" variant="primary" size="sm" disabled={save.isPending || !name.trim()}>
+            Save
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setNaming(false)}>
+            Cancel
+          </Button>
+        </form>
+      )}
+      {save.error && (
+        <p role="alert" className="text-sm text-danger">
+          {save.error.message}
+        </p>
+      )}
+    </section>
+  );
+}
+
+/** "refund · campaign sale · agent agent-x · from 2026-09-28" for a tooltip. */
+function describe(entry: SavedSearch): string {
+  const n = fromSaved(entry.filter);
+  const parts = [`“${entry.query}”`];
+  if (n.lang) parts.push(`language ${n.lang}`);
+  if (n.campaign) parts.push(`campaign ${n.campaign}`);
+  if (n.agent) parts.push(`agent ${n.agent}`);
+  if (n.disposition) parts.push(`disposition ${n.disposition}`);
+  if (n.from) parts.push(`from ${n.from}`);
+  if (n.to) parts.push(`to ${n.to}`);
+  return parts.join(' · ');
 }
