@@ -17,6 +17,7 @@ browser ── gateway (nginx) ──┬── /            likho-web-shell     
                              ├── /mfe/transcript/  likho-mfe-transcript  /recordings/:id
                              ├── /mfe/admin/       likho-mfe-admin       /admin (admins)
                              ├── /mfe/vocabulary/  likho-mfe-vocabulary  /vocabulary
+                             ├── /mfe/insights/    likho-mfe-insights    /insights
                              ├── /graphql /api/ /events/  likho-api
                              └── /media/           likho-media
 ```
@@ -40,9 +41,9 @@ pnpm install
 pnpm dev          # http://localhost:5173, use it through http://localhost:8080
 ```
 
-In `likho-mfe-library`, `likho-mfe-transcript`, `likho-mfe-admin` and `likho-mfe-vocabulary`:
-`pnpm dev` (5174 to 5177). The gateway proxies `/`, `/mfe/library/`, `/mfe/transcript/`,
-`/mfe/admin/` and `/mfe/vocabulary/` to the five dev servers.
+In `likho-mfe-library`, `likho-mfe-transcript`, `likho-mfe-admin`, `likho-mfe-vocabulary` and
+`likho-mfe-insights`: `pnpm dev` (5174 to 5178). The gateway proxies `/`, `/mfe/library/`,
+`/mfe/transcript/`, `/mfe/admin/`, `/mfe/vocabulary/` and `/mfe/insights/` to the six dev servers.
 
 The shell's own pages besides the home page: sign in (with "Forgotten your password?" →
 `/forgot`, which mails a link to `/reset/:token`), `/invite/:token` (the page an invitation link

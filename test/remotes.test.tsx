@@ -35,12 +35,14 @@ describe('remotes', () => {
       transcript: '/mfe/transcript/remoteEntry.js',
       admin: '/mfe/admin/remoteEntry.js',
       vocabulary: '/mfe/vocabulary/remoteEntry.js',
+      insights: '/mfe/insights/remoteEntry.js',
     });
     expect(registered).toEqual([
       { name: 'library', entry: 'https://cdn.example/library/remoteEntry.js', type: 'module' },
       { name: 'transcript', entry: '/mfe/transcript/remoteEntry.js', type: 'module' },
       { name: 'admin', entry: '/mfe/admin/remoteEntry.js', type: 'module' },
       { name: 'vocabulary', entry: '/mfe/vocabulary/remoteEntry.js', type: 'module' },
+      { name: 'insights', entry: '/mfe/insights/remoteEntry.js', type: 'module' },
     ]);
   });
 

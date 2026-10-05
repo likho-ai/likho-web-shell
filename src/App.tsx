@@ -61,6 +61,10 @@ export function App() {
                   path="vocabulary"
                   element={<Remote name="vocabulary" manifestUrl={config.manifestUrl} />}
                 />
+                <Route
+                  path="insights"
+                  element={<Remote name="insights" manifestUrl={config.manifestUrl} />}
+                />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="admin" element={<Remote name="admin" manifestUrl={config.manifestUrl} />} />
               </Route>
