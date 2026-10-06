@@ -7,7 +7,7 @@ import moduleFederationConfig from './module-federation.config.ts';
 export default defineConfig({
   plugins: [react(), tailwindcss(), federation(moduleFederationConfig)],
   server: {
-    port: 5173,
+    port: 5273,
     strictPort: true,
     // Listens on every interface so the gateway container reaches it through the host address.
     host: '0.0.0.0',

@@ -41,11 +41,11 @@ likho-api. For the recordings and transcript screens, the two apps' dev servers 
 
 ```bash
 pnpm install
-pnpm dev          # http://localhost:5173, use it through http://localhost:8080
+pnpm dev          # http://localhost:5273, use it through http://localhost:8080
 ```
 
 In `likho-mfe-library`, `likho-mfe-transcript`, `likho-mfe-admin`, `likho-mfe-vocabulary` and
-`likho-mfe-insights`: `pnpm dev` (5174 to 5178). The gateway proxies `/`, `/mfe/library/`,
+`likho-mfe-insights`: `pnpm dev` (5274 to 5278). The gateway proxies `/`, `/mfe/library/`,
 `/mfe/transcript/`, `/mfe/admin/`, `/mfe/vocabulary/` and `/mfe/insights/` to the six dev servers.
 
 The shell's own pages besides the home page: sign in (with "Forgotten your password?" →
